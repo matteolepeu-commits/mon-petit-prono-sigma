@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classement - Mon Petit Prono SIGMA</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+  body { background: #0f172a; color: white; min-height: 100vh; padding: 20px; }
+  h1 { color: #22c55e; text-align: center; margin-bottom: 30px; }
+  .nav { display: flex; gap: 15px; margin-bottom: 30px; flex-wrap: wrap; justify-content: center; }
+  .nav a { color: white; text-decoration: none; background: #334155; padding: 10px 20px; border-radius: 6px; }
+  .nav a:hover { background: #475569; }
+  table { width: 100%; max-width: 600px; margin: 0 auto; border-collapse: collapse; background: #1e293b; border-radius: 10px; overflow: hidden; }
+  th, td { padding: 12px 15px; text-align: left; }
+  th { background: #334155; color: #fbbf24; }
+  tr:nth-child(even) { background: #24324a; }
+  tr:first-child td { color: #fbbf24; font-weight: bold; }
+  .rang { text-align: center; width: 50px; }
+  .points { text-align: center; font-weight: bold; color: #22c55e; }
+</style>
+</head>
+<body>
+
+<h1>🏆 Classement Général</h1>
+
+<div class="nav">
+  <a href="index.html">🏠 Accueil</a>
+  <a href="pronostics.html">⚽ Pronostics</a>
+  <a href="classement.html">🏆 Classement</a>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th class="rang">#</th>
+      <th>Pseudo</th>
+      <th class="points">Points</th>
+    </tr>
+  </thead>
+  <tbody id="classement-body">
+    <tr><td colspan="3" style="text-align:center; padding:20px;">Chargement...</td></tr>
+  </tbody>
+</table>
+
+<script>
+  const SUPABASE_URL = "https://idsqkecgefrebswrvoja.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlkc3FrZWNnZWZyZWJzd3J2b2phIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTQ0MTIsImV4cCI6MjA5OTQzMDQxMn0.IwIGg7FgG1_bHrNIJbqjE3PUa0ZDD1eV2Vb0do3MlG8";
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  async function chargerClassement() {
+    const { data: etudiants } = await supabase.from("etudiants").select("*");
+    const { data: pronostics } = await supabase.from("pronostics").select("*");
+    const { data: matchs } = await supabase.from("matchs").select("*").eq("statut", "termine");
+
+    const scores = {};
+    etudiants.forEach(e => scores[e.id] = { pseudo: e.pseudo, points: 0 });
+
+    pronostics.forEach(p => {
+      const match = matchs.find(m => m.id === p.match_id);
+      if (!match) return;
+      const points = calculerPoints(p.score_equipe1, p.score_equipe2, match.score_equipe1, match.score_equipe2);
+      if (scores[p.etudiant_id]) scores[p.etudiant_id].points += points;
+    });
+
+    const classement = Object.values(scores).sort((a, b) => b.points - a.points);
+
+    const tbody = document.getElementById("classement-body");
+    tbody.innerHTML = "";
+
+    if (classement.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:20px;">Aucun étudiant pour le moment</td></tr>`;
+      return;
+    }
+
+    classement.forEach((e, index) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="rang">${index + 1}</td>
+        <td>${e.pseudo}</td>
+        <td class="points">${e.points}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function calculerPoints(pS1, pS2, rS1, rS2) {
+    if (pS1 === rS1 && pS2 === rS2) return 3;
+    const pDiff = pS1 - pS2;
+    const rDiff = rS1 - rS2;
+    if ((pDiff > 0 && rDiff > 0) || (pDiff < 0 && rDiff < 0) || (pDiff === 0 && rDiff === 0)) return 1;
+    return 0;
+  }
+
+  chargerClassement();
+</script>
+
+</body>
+</html>
