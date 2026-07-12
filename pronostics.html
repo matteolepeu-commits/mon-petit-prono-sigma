@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pronostics - Mon Petit Prono SIGMA</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+  body { background: #0f172a; color: white; min-height: 100vh; padding: 20px; }
+  h1 { color: #22c55e; text-align: center; margin-bottom: 10px; }
+  .pseudo-info { text-align: center; color: #94a3b8; margin-bottom: 20px; }
+  .nav { display: flex; gap: 15px; margin-bottom: 30px; flex-wrap: wrap; justify-content: center; }
+  .nav a { color: white; text-decoration: none; background: #334155; padding: 10px 20px; border-radius: 6px; }
+  .nav a:hover { background: #475569; }
+  .ligue-titre { color: #fbbf24; margin: 25px 0 10px; font-size: 20px; border-bottom: 1px solid #334155; padding-bottom: 5px; }
+  .match-card { background: #1e293b; padding: 20px; border-radius: 10px; margin-bottom: 15px; max-width: 500px; margin-left: auto; margin-right: auto; }
+  .equipes { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-weight: bold; font-size: 16px; }
+  .scores { display: flex; justify-content: center; align-items: center; gap: 10px; }
+  .scores input { width: 60px; padding: 10px; text-align: center; border-radius: 6px; border: none; font-size: 18px; }
+  .vs { color: #94a3b8; }
+  button.valider { display: block; margin: 15px auto 0; padding: 10px 25px; background: #22c55e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; }
+  button.valider:hover { background: #16a34a; }
+  .statut { text-align: center; font-size: 13px; margin-top: 8px; color: #94a3b8; }
+  .resultat-final { text-align: center; color: #22c55e; font-weight: bold; margin-top: 10px; }
+  .points { color: #fbbf24; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>⚽ Pronostics</h1>
+<p class="pseudo-info" id="pseudoInfo"></p>
+
+<div class="nav">
+  <a href="classement.html">🏅 Classement</a>
+  <a href="#" onclick="deconnexion()">🚪 Déconnexion</a>
+</div>
+
+<div id="contenu">Chargement des matchs...</div>
+
+<script>
+  const SUPABASE_URL = "https://ykubdrctzejbsvrvoja.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlkc3FrZWNnZWZyZWJzd3J2b2phIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTQ0MTIsImV4cCI6MjA5OTQzMDQxMn0.IwIGg7FgG1_bHrNIJbqjE3PUa0ZDD1eV2Vb0do3MlG8";
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const pseudo = localStorage.getItem("pseudo");
+  const etudiantId = localStorage.getItem("etudiant_id");
+
+  if (!pseudo) {
+    window.location.href = "index.html";
+  }
+
+  document.getElementById("pseudoInfo").textContent = "Connecté en tant que : " + pseudo;
+
+  function deconnexion() {
+    localStorage.clear();
+    window.location.href = "index.html";
+  }
+
+  async function chargerMatchs() {
+    const { data: ligues } = await supabase.from("ligues").select("*, disciplines(nom)");
+    const { data: matchs } = await supabase.from("matchs").select("*").order("date_match", { ascending: true });
+    const { data: pronosExistants } = await supabase.from("pronostics").select("*").eq("etudiant_id", etudiantId);
+
+    const contenu = document.getElementById("contenu");
+    contenu.innerHTML = "";
+
+    if (!matchs || matchs.length === 0) {
+      contenu.innerHTML = "<p style='text-align:center;color:#94a3b8;'>Aucun match disponible pour le moment.</p>";
+      return;
+    }
+
+    ligues.forEach(ligue => {
+      const matchsDeLaLigue = matchs.filter(m => m.ligue_id === ligue.id);
+      if (matchsDeLaLigue.length === 0) return;
+
+      const titreLigue = document.createElement("div");
+      titreLigue.className = "ligue-titre";
+      titreLigue.textContent = ligue.nom;
+      contenu.appendChild(titreLigue);
+
+      matchsDeLaLigue.forEach(match => {
+        const pronoExistant = pronosExistants.find(p => p.match_id === match.id);
+        const estTermine = match.score_equipe1 !== null && match.score_equipe2 !== null;
+
+        const card = document.createElement("div");
+        card.className = "match-card";
+
+        let contenuHtml = `
+          <div class="equipes">
+            <span>${match.equipe1}</span>
+            <span class="vs">VS</span>
+            <span>${match.equipe2}</span>
+          </div>
+        `;
+
+        if (estTermine) {
+          contenuHtml += `<div class="resultat-final">Score final : ${match.score_equipe1} - ${match.score_equipe2}</div>`;
+          if (pronoExistant) {
+            const pts = calculerPoints(pronoExistant.score_equipe1, pronoExistant.score_equipe2, match.score_equipe1, match.score_equipe2);
+            contenuHtml += `<div class="statut">Ton prono : ${pronoExistant.score_equipe1} - ${pronoExistant.score_equipe2} → <span class="points">${pts} pts</span></div>`;
+          } else {
+            contenuHtml += `<div class="statut">Tu n'as pas pronostiqué ce match.</div>`;
+          }
+        } else {
+          contenuHtml += `
+            <div class="scores">
+              <input type="number" min="0" id="s1-${match.id}" value="${pronoExistant ? pronoExistant.score_equipe1 : ''}" placeholder="0">
+              <span class="vs">-</span>
+              <input type="number" min="0" id="s2-${match.id}" value="${pronoExistant ? pronoExistant.score_equipe2 : ''}" placeholder="0">
+            </div>
+            <button class="valider" onclick="enregistrerProno('${match.id}')">Valider mon prono</button>
+            <div class="statut" id="statut-${match.id}">${pronoExistant ? "Prono déjà enregistré, tu peux le modifier." : "Pas encore de prono."}</div>
+          `;
+        }
+
+        card.innerHTML = contenuHtml;
+        contenu.appendChild(card);
+      });
+    });
+  }
+
+  function calculerPoints(pS1, pS2, rS1, rS2) {
+    if (pS1 === rS1 && pS2 === rS2) return 3;
+    const pDiff = pS1 - pS2;
+    const rDiff = rS1 - rS2;
+    if ((pDiff > 0 && rDiff > 0) || (pDiff < 0 && rDiff < 0) || (pDiff === 0 && rDiff === 0)) return 1;
+    return 0;
+  }
+
+  async function enregistrerProno(matchId) {
+    const s1 = parseInt(document.getElementById(`s1-${matchId}`).value);
+    const s2 = parseInt(document.getElementById(`s2-${matchId}`).value);
+    const statutDiv = document.getElementById(`statut-${matchId}`);
+
+    if (isNaN(s1) || isNaN(s2) || s1 < 0 || s2 < 0) {
+      statutDiv.textContent = "Merci d'entrer un score valide.";
+      return;
+    }
+
+    const { data: existant } = await supabase
+      .from("pronostics")
+      .select("*")
+      .eq("match_id", matchId)
+      .eq("etudiant_id", etudiantId)
+      .single();
+
+    if (existant) {
+      await supabase.from("pronostics").update({ score_equipe1: s1, score_equipe2: s2 }).eq("id", existant.id);
+    } else {
+      await supabase.from("pronostics").insert([{ match_id: matchId, etudiant_id: etudiantId, score_equipe1: s1, score_equipe2: s2 }]);
+    }
+
+    statutDiv.textContent = "✅ Prono enregistré !";
+  }
+
+  chargerMatchs();
+</script>
+
+</body>
+</html>
