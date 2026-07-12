@@ -130,6 +130,20 @@
     });
   }
 
+ async function supprimerMatch(id) {
+   if (!confirm("Es-tu sûr de vouloir supprimer ce match ?")) return;
+
+   const { error } = await supabaseClient
+     .from("matchs")
+     .delete()
+     .eq("id", id);
+
+   if (error) {
+     alert("Erreur lors de la suppression : " + error.message);
+   } else {
+     chargerMatchs();
+   }
+ }
   async function validerResultat(matchId) {
     const s1 = document.getElementById(`s1-${matchId}`).value;
     const s2 = document.getElementById(`s2-${matchId}`).value;
