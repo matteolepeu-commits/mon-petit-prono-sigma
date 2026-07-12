@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - Mon Petit Prono SIGMA</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+  body { background: #0f172a; color: white; min-height: 100vh; padding: 20px; }
+  h1 { color: #22c55e; text-align: center; margin-bottom: 20px; }
+  h2 { color: #fbbf24; margin: 20px 0 10px; }
+  .nav { display: flex; gap: 15px; margin-bottom: 30px; flex-wrap: wrap; justify-content: center; }
+  .nav a { color: white; text-decoration: none; background: #334155; padding: 10px 20px; border-radius: 6px; }
+  .nav a:hover { background: #475569; }
+  .box { max-width: 600px; margin: 0 auto 30px; background: #1e293b; padding: 20px; border-radius: 10px; }
+  input, select { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 6px; border: none; background: #334155; color: white; }
+  button { width: 100%; padding: 12px; background: #22c55e; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 5px; }
+  button:hover { background: #16a34a; }
+  .match-item { background: #24324a; padding: 12px; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .match-item span { font-size: 14px; }
+  .match-item input { width: 50px; display: inline-block; margin: 0; }
+  .valider-btn { width: auto; padding: 8px 15px; font-size: 13px; }
+  #mdp-box { max-width: 400px; margin: 100px auto; text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="mdp-box">
+  <h1>🔐 Accès Admin</h1>
+  <input type="password" id="mdp-input" placeholder="Mot de passe">
+  <button onclick="verifierMdp()">Entrer</button>
+</div>
+
+<div id="admin-content" style="display:none;">
+  <h1>🔐 Espace Admin</h1>
+
+  <div class="nav">
+    <a href="index.html">🏠 Accueil</a>
+    <a href="pronostics.html">⚽ Pronostics</a>
+    <a href="classement.html">🏆 Classement</a>
+  </div>
+
+  <div class="box">
+    <h2>➕ Ajouter un match</h2>
+    <input type="text" id="equipe1" placeholder="Équipe 1">
+    <input type="text" id="equipe2" placeholder="Équipe 2">
+    <input type="date" id="date-match">
+    <button onclick="ajouterMatch()">Ajouter le match</button>
+  </div>
+
+  <div class="box">
+    <h2>⚽ Matchs en attente de résultat</h2>
+    <div id="liste-matchs">Chargement...</div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://idsqkecgefrebswrvoja.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlkc3FrZWNnZWZyZWJzd3J2b2phIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTQ0MTIsImV4cCI6MjA5OTQzMDQxMn0.IwIGg7FgG1_bHrNIJbqjE3PUa0ZDD1eV2Vb0do3MlG8";
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const MOT_DE_PASSE = "sigma2026";
+
+  function verifierMdp() {
+    const val = document.getElementById("mdp-input").value;
+    if (val === MOT_DE_PASSE) {
+      document.getElementById("mdp-box").style.display = "none";
+      document.getElementById("admin-content").style.display = "block";
+      chargerMatchs();
+    } else {
+      alert("Mot de passe incorrect");
+    }
+  }
+
+  async function ajouterMatch() {
+    const equipe1 = document.getElementById("equipe1").value.trim();
+    const equipe2 = document.getElementById("equipe2").value.trim();
+    const date = document.getElementById("date-match").value;
+
+    if (!equipe1 || !equipe2 || !date) {
+      alert("Remplis tous les champs");
+      return;
+    }
+
+    const { error } = await supabase.from("matchs").insert([{
+      equipe1, equipe2, date_match: date, statut: "a_venir"
+    }]);
+
+    if (error) {
+      alert("Erreur : " + error.message);
+      return;
+    }
+
+    document.getElementById("equipe1").value = "";
+    document.getElementById("equipe2").value = "";
+    document.getElementById("date-match").value = "";
+    chargerMatchs();
+  }
+
+  async function chargerMatchs() {
+    const { data: matchs } = await supabase.from("matchs").select("*").order("date_match", { ascending: true });
+    const div = document.getElementById("liste-matchs");
+    div.innerHTML = "";
+
+    if (!matchs || matchs.length === 0) {
+      div.innerHTML = "Aucun match pour le moment";
+      return;
+    }
+
+    matchs.forEach(m => {
+      const item = document.createElement("div");
+      item.className = "match-item";
+
+      if (m.statut === "termine") {
+        item.innerHTML = `
+          <span>✅ ${m.equipe1} ${m.score_equipe1} - ${m.score_equipe2} ${m.equipe2}</span>
+        `;
+      } else {
+        item.innerHTML = `
+          <span>${m.equipe1} vs ${m.equipe2} (${m.date_match})</span>
+          <input type="number" id="s1-${m.id}" placeholder="0" min="0">
+          <span>-</span>
+          <input type="number" id="s2-${m.id}" placeholder="0" min="0">
+          <button class="valider-btn" onclick="validerResultat(${m.id})">Valider</button>
+        `;
+      }
+
+      div.appendChild(item);
+    });
+  }
+
+  async function validerResultat(matchId) {
+    const s1 = document.getElementById(`s1-${matchId}`).value;
+    const s2 = document.getElementById(`s2-${matchId}`).value;
+
+    if (s1 === "" || s2 === "") {
+      alert("Entre les deux scores");
+      return;
+    }
+
+    const { error } = await supabase.from("matchs").update({
+      score_equipe1: parseInt(s1),
+      score_equipe2: parseInt(s2),
+      statut: "termine"
+    }).eq("id", matchId);
+
+    if (error) {
+      alert("Erreur : " + error.message);
+      return;
+    }
+
+    chargerMatchs();
+  }
+</script>
+
+</body>
+</html>
