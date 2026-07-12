@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mon Petit Prono SIGMA</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+  body { background: #0f172a; color: white; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+  h1 { color: #22c55e; margin: 30px 0; text-align: center; }
+  .card { background: #1e293b; padding: 30px; border-radius: 12px; max-width: 400px; width: 100%; margin-bottom: 20px; }
+  input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: none; font-size: 16px; }
+  button { width: 100%; padding: 12px; background: #22c55e; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; margin-top: 10px; }
+  button:hover { background: #16a34a; }
+  .nav { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
+  .nav a { color: white; text-decoration: none; background: #334155; padding: 10px 20px; border-radius: 6px; }
+  .nav a:hover { background: #475569; }
+  #message { text-align: center; margin-top: 10px; color: #fbbf24; }
+</style>
+</head>
+<body>
+
+<h1>🏆 Mon Petit Prono SIGMA</h1>
+
+<div class="nav">
+  <a href="pronostics.html">Pronostics</a>
+  <a href="classement.html">Classement</a>
+  <a href="admin.html">Admin</a>
+</div>
+
+<div class="card">
+  <h2 style="margin-bottom: 15px;">Connexion étudiant</h2>
+  <input type="text" id="pseudo" placeholder="Entre ton pseudo">
+  <button onclick="connexion()">Se connecter / S'inscrire</button>
+  <p id="message"></p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const SUPABASE_URL = "https://idsqkecgefrebswrvoja.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlkc3FrZWNnZWZyZWJzd3J2b2phIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTQ0MTIsImV4cCI6MjA5OTQzMDQxMn0.IwIGg7FgG1_bHrNIJbqjE3PUa0ZDD1eV2Vb0do3MlG8";
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // Si déjà connecté, redirige direct vers pronostics
+  if (localStorage.getItem("pseudo")) {
+    window.location.href = "pronostics.html";
+  }
+
+  async function connexion() {
+    const pseudo = document.getElementById("pseudo").value.trim();
+    const message = document.getElementById("message");
+
+    if (!pseudo) {
+      message.textContent = "Merci d'entrer un pseudo.";
+      return;
+    }
+
+    // Vérifie si l'étudiant existe déjà
+    let { data: existant, error } = await supabase
+      .from("etudiants")
+      .select("*")
+      .eq("pseudo", pseudo)
+      .single();
+
+    if (existant) {
+      localStorage.setItem("pseudo", pseudo);
+      localStorage.setItem("etudiant_id", existant.id);
+      window.location.href = "pronostics.html";
+      return;
+    }
+
+    // Sinon on le crée
+    let { data: nouveau, error: err2 } = await supabase
+      .from("etudiants")
+      .insert([{ pseudo: pseudo }])
+      .select()
+      .single();
+
+    if (err2) {
+      message.textContent = "Erreur : ce pseudo existe peut-être déjà.";
+      return;
+    }
+
+    localStorage.setItem("pseudo", pseudo);
+    localStorage.setItem("etudiant_id", nouveau.id);
+    window.location.href = "pronostics.html";
+  }
+</script>
+
+</body>
+</html>
