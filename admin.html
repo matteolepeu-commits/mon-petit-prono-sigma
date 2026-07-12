@@ -83,7 +83,7 @@
       return;
     }
 
-    const { error } = await supabase.from("matchs").insert([{
+    const { error } = await supabaseClient.from("matchs").insert([{
       equipe1, equipe2, date_match: date, statut: "a_venir"
     }]);
 
@@ -99,7 +99,7 @@
   }
 
   async function chargerMatchs() {
-    const { data: matchs } = await supabase.from("matchs").select("*").order("date_match", { ascending: true });
+    const { data: matchs } = await supabaseClient.from("matchs").select("*").order("date_match", { ascending: true });
     const div = document.getElementById("liste-matchs");
     div.innerHTML = "";
 
@@ -139,7 +139,7 @@
       return;
     }
 
-    const { error } = await supabase.from("matchs").update({
+    const { error } = await supabaseClient.from("matchs").update({
       score_equipe1: parseInt(s1),
       score_equipe2: parseInt(s2),
       statut: "termine"
