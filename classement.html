@@ -16,19 +16,22 @@
   th, td { padding: 12px 15px; text-align: left; }
   th { background: #334155; color: #fbbf24; }
   tr:nth-child(even) { background: #24324a; }
-  tr:first-child td { color: #fbbf24; font-weight: bold; }
+  tbody tr:first-child td { color: #fbbf24; font-weight: bold; }
+  tr.moi td { background: #14532d; }
   .rang { text-align: center; width: 50px; }
   .points { text-align: center; font-weight: bold; color: #22c55e; }
+  #pseudo-connecte { text-align: center; color: #94a3b8; margin-bottom: 15px; font-size: 14px; }
 </style>
 </head>
 <body>
 
 <h1>🏆 Classement Général</h1>
+<p id="pseudo-connecte"></p>
 
 <div class="nav">
-  <a href="index.html">🏠 Accueil</a>
   <a href="pronostics.html">⚽ Pronostics</a>
   <a href="classement.html">🏆 Classement</a>
+  <a href="#" onclick="deconnexion()">🚪 Déconnexion</a>
 </div>
 
 <table>
@@ -47,15 +50,52 @@
 <script>
   const SUPABASE_URL = "https://idsqkecgefrebswrvoja.supabase.co";
   const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlkc3FrZWNnZWZyZWJzd3J2b2phIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTQ0MTIsImV4cCI6MjA5OTQzMDQxMn0.IwIGg7FgG1_bHrNIJbqjE3PUa0ZDD1eV2Vb0do3MlG8";
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // Protection : il faut être connecté
+  const pseudoConnecte = localStorage.getItem("pseudo");
+  const etudiantId = localStorage.getItem("etudiant_id");
+
+  if (!pseudoConnecte || !etudiantId) {
+    window.location.href = "index.html";
+  }
+
+  document.getElementById("pseudo-connecte").textContent = "Connecté en tant que " + pseudoConnecte;
+
+  async function deconnexion() {
+    await supabaseClient.auth.signOut();
+    localStorage.clear();
+    window.location.href = "index.html";
+  }
+
+  // Évite l'injection de HTML via un pseudo
+  function echapper(texte) {
+    const div = document.createElement("div");
+    div.textContent = texte;
+    return div.innerHTML;
+  }
 
   async function chargerClassement() {
-    const { data: etudiants } = await supabase.from("etudiants").select("*");
-    const { data: pronostics } = await supabase.from("pronostics").select("*");
-    const { data: matchs } = await supabase.from("matchs").select("*").eq("statut", "termine");
+    const tbody = document.getElementById("classement-body");
+
+    const [resEtudiants, resPronostics, resMatchs] = await Promise.all([
+      supabaseClient.from("etudiants").select("id, pseudo"),
+      supabaseClient.from("pronostics").select("*"),
+      supabaseClient.from("matchs").select("*").eq("statut", "termine")
+    ]);
+
+    if (resEtudiants.error || resPronostics.error || resMatchs.error) {
+      const err = resEtudiants.error || resPronostics.error || resMatchs.error;
+      tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:20px; color:#f87171;">Erreur : ${echapper(err.message)}</td></tr>`;
+      return;
+    }
+
+    const etudiants = resEtudiants.data || [];
+    const pronostics = resPronostics.data || [];
+    const matchs = resMatchs.data || [];
 
     const scores = {};
-    etudiants.forEach(e => scores[e.id] = { pseudo: e.pseudo, points: 0 });
+    etudiants.forEach(e => scores[e.id] = { id: e.id, pseudo: e.pseudo, points: 0 });
 
     pronostics.forEach(p => {
       const match = matchs.find(m => m.id === p.match_id);
@@ -66,7 +106,6 @@
 
     const classement = Object.values(scores).sort((a, b) => b.points - a.points);
 
-    const tbody = document.getElementById("classement-body");
     tbody.innerHTML = "";
 
     if (classement.length === 0) {
@@ -76,9 +115,10 @@
 
     classement.forEach((e, index) => {
       const tr = document.createElement("tr");
+      if (String(e.id) === String(etudiantId)) tr.classList.add("moi");
       tr.innerHTML = `
         <td class="rang">${index + 1}</td>
-        <td>${e.pseudo}</td>
+        <td>${echapper(e.pseudo)}</td>
         <td class="points">${e.points}</td>
       `;
       tbody.appendChild(tr);
@@ -97,4 +137,4 @@
 </script>
 
 </body>
-</html>
+</htm
