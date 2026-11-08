@@ -54,10 +54,11 @@
 
   document.getElementById("pseudoInfo").textContent = "Connecté en tant que : " + pseudo;
 
-  function deconnexion() {
-    localStorage.clear();
-    window.location.href = "index.html";
-  }
+  async function deconnexion() {
+  await supabaseClient.auth.signOut();
+  localStorage.clear();
+  window.location.href = "index.html";
+}
 
   function afficherErreur(texte) {
     document.getElementById("contenu").innerHTML = `<div class="erreur">❌ ${texte}</div>`;
