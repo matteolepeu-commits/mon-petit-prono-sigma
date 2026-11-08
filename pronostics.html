@@ -100,7 +100,9 @@
 
       groupe.matchs.forEach(match => {
         const pronoExistant = (pronosExistants || []).find(p => p.match_id === match.id);
-        const estTermine = match.score_equipe1 !== null && match.score_equipe2 !== null;
+        const s1Reel = match.score1 ?? match.score_equipe1 ?? null;
+        const s2Reel = match.score2 ?? match.score_equipe2 ?? null;
+        const estTermine = s1Reel !== null && s2Reel !== null;
 
         const card = document.createElement("div");
         card.className = "match-card";
@@ -114,13 +116,14 @@
         `;
 
         if (estTermine) {
-          contenuHtml += `<div class="resultat-final">Score final : ${match.score_equipe1} - ${match.score_equipe2}</div>`;
+          contenuHtml += `<div class="resultat-final">Score final : ${s1Reel} - ${s2Reel}</div>`;
           if (pronoExistant) {
-            const pts = calculerPoints(pronoExistant.score1_pronostic, pronoExistant.score2_pronostic, match.score_equipe1, match.score_equipe2);
+            const pts = calculerPoints(pronoExistant.score1_pronostic, pronoExistant.score2_pronostic, s1Reel, s2Reel);
             contenuHtml += `<div class="statut">Ton prono : ${pronoExistant.score1_pronostic} - ${pronoExistant.score2_pronostic} → <span class="points">${pts} pts</span></div>`;
           } else {
             contenuHtml += `<div class="statut">Tu n'as pas pronostiqué ce match.</div>`;
           }
+        }
         } else {
           contenuHtml += `
             <div class="scores">
