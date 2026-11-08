@@ -24,6 +24,7 @@
   .statut { text-align: center; font-size: 13px; margin-top: 8px; color: #94a3b8; }
   .resultat-final { text-align: center; color: #22c55e; font-weight: bold; margin-top: 10px; }
   .points { color: #fbbf24; font-weight: bold; }
+  .erreur { text-align: center; color: #f87171; background: #1e293b; padding: 15px; border-radius: 10px; max-width: 500px; margin: 0 auto; }
 </style>
 </head>
 <body>
@@ -46,7 +47,8 @@
   const pseudo = localStorage.getItem("pseudo");
   const etudiantId = localStorage.getItem("etudiant_id");
 
-  if (!pseudo) {
+  if (!pseudo || !etudiantId) {
+    localStorage.clear();
     window.location.href = "index.html";
   }
 
@@ -57,12 +59,22 @@
     window.location.href = "index.html";
   }
 
-  async function chargerMatchs() {
-    const { data: ligues } = await supabaseClient.from("ligues").select("*, disciplines(nom)");
-    const { data: matchs } = await supabaseClient.from("matchs").select("*").order("date_match", { ascending: true });
-    const { data: pronosExistants } = await supabaseClient.from("pronostics").select("*").eq("etudiant_id", etudiantId);
+  function afficherErreur(texte) {
+    document.getElementById("contenu").innerHTML = `<div class="erreur">❌ ${texte}</div>`;
+  }
 
+  async function chargerMatchs() {
     const contenu = document.getElementById("contenu");
+
+    const { data: ligues, error: errLigues } = await supabaseClient.from("ligues").select("*");
+    if (errLigues) { afficherErreur("Erreur table ligues : " + errLigues.message); return; }
+
+    const { data: matchs, error: errMatchs } = await supabaseClient.from("matchs").select("*").order("date_match", { ascending: true });
+    if (errMatchs) { afficherErreur("Erreur table matchs : " + errMatchs.message); return; }
+
+    const { data: pronosExistants, error: errPronos } = await supabaseClient.from("pronostics").select("*").eq("etudiant_id", etudiantId);
+    if (errPronos) { afficherErreur("Erreur table pronostics : " + errPronos.message); return; }
+
     contenu.innerHTML = "";
 
     if (!matchs || matchs.length === 0) {
@@ -80,7 +92,7 @@
       contenu.appendChild(titreLigue);
 
       matchsDeLaLigue.forEach(match => {
-        const pronoExistant = pronosExistants.find(p => p.match_id === match.id);
+        const pronoExistant = (pronosExistants || []).find(p => p.match_id === match.id);
         const estTermine = match.score_equipe1 !== null && match.score_equipe2 !== null;
 
         const card = document.createElement("div");
@@ -138,20 +150,31 @@
       return;
     }
 
-    const { data: existant } = await supabaseClient
+    const { data: existant, error: errRecherche } = await supabaseClient
       .from("pronostics")
       .select("*")
       .eq("match_id", matchId)
       .eq("etudiant_id", etudiantId)
-      .single();
+      .maybeSingle();
 
-    if (existant) {
-      await supabase.from("pronostics").update({ score_equipe1: s1, score_equipe2: s2 }).eq("id", existant.id);
-    } else {
-      await supabase.from("pronostics").insert([{ match_id: matchId, etudiant_id: etudiantId, score_equipe1: s1, score_equipe2: s2 }]);
+    if (errRecherche) {
+      statutDiv.textContent = "❌ " + errRecherche.message;
+      return;
     }
 
-    statutDiv.textContent = "✅ Prono enregistré !";
+    let erreur;
+    if (existant) {
+      ({ error: erreur } = await supabaseClient
+        .from("pronostics")
+        .update({ score_equipe1: s1, score_equipe2: s2 })
+        .eq("id", existant.id));
+    } else {
+      ({ error: erreur } = await supabaseClient
+        .from("pronostics")
+        .insert([{ match_id: matchId, etudiant_id: etudiantId, score_equipe1: s1, score_equipe2: s2 }]));
+    }
+
+    statutDiv.textContent = erreur ? "❌ " + erreur.message : "✅ Prono enregistré !";
   }
 
   chargerMatchs();
