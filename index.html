@@ -12,10 +12,15 @@
   input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: none; font-size: 16px; }
   button { width: 100%; padding: 12px; background: #22c55e; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; margin-top: 10px; }
   button:hover { background: #16a34a; }
+  button:disabled { background: #475569; cursor: not-allowed; }
+  button.lien { background: none; color: #94a3b8; font-size: 14px; text-decoration: underline; }
+  button.lien:hover { background: none; color: white; }
   .nav { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
   .nav a { color: white; text-decoration: none; background: #334155; padding: 10px 20px; border-radius: 6px; }
   .nav a:hover { background: #475569; }
   #message { text-align: center; margin-top: 10px; color: #fbbf24; }
+  .info { text-align: center; color: #94a3b8; font-size: 14px; margin-bottom: 10px; }
+  .cache { display: none; }
 </style>
 </head>
 <body>
@@ -30,8 +35,31 @@
 
 <div class="card">
   <h2 style="margin-bottom: 15px;">Connexion étudiant</h2>
-  <input type="text" id="pseudo" placeholder="Entre ton pseudo">
-  <button onclick="connexion()">Se connecter / S'inscrire</button>
+
+  <!-- Étape 1 : saisie du mail -->
+  <div id="etape1">
+    <p class="info">Entre ton adresse mail d'école pour recevoir un lien de connexion.</p>
+    <input type="email" id="email" placeholder="prenom.nom@ecole.fr">
+    <button id="btnEmail" onclick="envoyerLien()">Recevoir mon lien de connexion</button>
+  </div>
+
+  <!-- Étape 2 : lien envoyé -->
+  <div id="etape2" class="cache">
+    <p class="info">
+      📧 Un lien de connexion a été envoyé à<br>
+      <strong id="emailAffiche" style="color:white;"></strong><br><br>
+      Clique sur le lien dans le mail pour te connecter (pense à vérifier les spams).
+    </p>
+    <button class="lien" onclick="retourEtape1()">← Changer d'adresse mail</button>
+  </div>
+
+  <!-- Étape 3 : choix du pseudo (première connexion) -->
+  <div id="etape3" class="cache">
+    <p class="info">Bienvenue ! Choisis ton pseudo, il sera visible dans le classement.</p>
+    <input type="text" id="pseudo" placeholder="Ton pseudo" maxlength="20">
+    <button id="btnPseudo" onclick="validerPseudo()">Valider mon pseudo</button>
+  </div>
+
   <p id="message"></p>
 </div>
 
@@ -41,50 +69,149 @@
   const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlkc3FrZWNnZWZyZWJzd3J2b2phIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTQ0MTIsImV4cCI6MjA5OTQzMDQxMn0.IwIGg7FgG1_bHrNIJbqjE3PUa0ZDD1eV2Vb0do3MlG8";
   const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // Si déjà connecté, redirige direct vers pronostics
-  if (localStorage.getItem("pseudo")) {
-    window.location.href = "pronostics.html";
+  // ⚠️ À MODIFIER : le(s) domaine(s) mail de ton école
+  const DOMAINES_AUTORISES = ["sigma-clermont.fr"];
+
+  function afficherMessage(texte) {
+    document.getElementById("message").textContent = texte;
   }
 
-  async function connexion() {
-    const pseudo = document.getElementById("pseudo").value.trim();
-    const message = document.getElementById("message");
+  function afficherEtape(numero) {
+    ["etape1", "etape2", "etape3"].forEach((id, i) => {
+      document.getElementById(id).classList.toggle("cache", i + 1 !== numero);
+    });
+    afficherMessage("");
+  }
 
-    if (!pseudo) {
-      message.textContent = "Merci d'entrer un pseudo.";
+  function retourEtape1() {
+    afficherEtape(1);
+  }
+
+  function domaineValide(email) {
+    const domaine = email.split("@")[1];
+    return domaine && DOMAINES_AUTORISES.includes(domaine.toLowerCase());
+  }
+
+  // Envoi du lien magique
+  async function envoyerLien() {
+    const email = document.getElementById("email").value.trim().toLowerCase();
+    const btn = document.getElementById("btnEmail");
+
+    if (!email) {
+      afficherMessage("Merci d'entrer ton adresse mail.");
       return;
     }
 
-    // Vérifie si l'étudiant existe déjà
-    let { data: existant, error } = await supabaseClient
+    if (!domaineValide(email)) {
+      afficherMessage("Utilise ton adresse mail d'école (@" + DOMAINES_AUTORISES.join(" ou @") + ").");
+      return;
+    }
+
+    btn.disabled = true;
+    afficherMessage("Envoi en cours...");
+
+    const { error } = await supabaseClient.auth.signInWithOtp({
+      email: email,
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: window.location.origin + window.location.pathname
+      }
+    });
+
+    btn.disabled = false;
+
+    if (error) {
+      afficherMessage("Erreur : " + error.message);
+      return;
+    }
+
+    document.getElementById("emailAffiche").textContent = email;
+    afficherEtape(2);
+  }
+
+  // Après connexion : récupère le profil ou demande un pseudo
+  async function gererSession(user) {
+    const { data: etudiant, error } = await supabaseClient
       .from("etudiants")
       .select("*")
-      .eq("pseudo", pseudo)
-      .single();
+      .eq("auth_id", user.id)
+      .maybeSingle();
 
-    if (existant) {
-      localStorage.setItem("pseudo", pseudo);
-      localStorage.setItem("etudiant_id", existant.id);
-      window.location.href = "pronostics.html";
+    if (error) {
+      afficherEtape(1);
+      afficherMessage("Erreur : " + error.message);
       return;
     }
 
-    // Sinon on le crée
-    let { data: nouveau, error: err2 } = await supabaseClient
+    if (etudiant) {
+      localStorage.setItem("pseudo", etudiant.pseudo);
+      localStorage.setItem("etudiant_id", etudiant.id);
+      window.location.href = "pronostics.html";
+    } else {
+      // Première connexion : il doit choisir un pseudo
+      afficherEtape(3);
+    }
+  }
+
+  // Choix du pseudo (première connexion)
+  async function validerPseudo() {
+    const pseudo = document.getElementById("pseudo").value.trim();
+    const btn = document.getElementById("btnPseudo");
+
+    if (pseudo.length < 3) {
+      afficherMessage("Le pseudo doit faire au moins 3 caractères.");
+      return;
+    }
+
+    btn.disabled = true;
+
+    const { data: { user } } = await supabaseClient.auth.getUser();
+
+    // Vérifie que le pseudo n'est pas déjà pris
+    const { data: pseudoPris } = await supabaseClient
       .from("etudiants")
-      .insert([{ pseudo: pseudo }])
+      .select("id")
+      .eq("pseudo", pseudo)
+      .maybeSingle();
+
+    if (pseudoPris) {
+      afficherMessage("Ce pseudo est déjà pris, choisis-en un autre.");
+      btn.disabled = false;
+      return;
+    }
+
+    const { data: nouveau, error } = await supabaseClient
+      .from("etudiants")
+      .insert([{ pseudo: pseudo, email: user.email, auth_id: user.id }])
       .select()
       .single();
 
-    if (err2) {
-      message.textContent = "Erreur : " + err2.message;
+    btn.disabled = false;
+
+    if (error) {
+      afficherMessage("Erreur : " + error.message);
       return;
     }
 
-    localStorage.setItem("pseudo", pseudo);
+    localStorage.setItem("pseudo", nouveau.pseudo);
     localStorage.setItem("etudiant_id", nouveau.id);
     window.location.href = "pronostics.html";
   }
+
+  // Au chargement : vérifie si une session existe (retour du lien magique)
+  (async function init() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) {
+      await gererSession(session.user);
+    }
+  })();
+
+  // Détecte aussi la connexion en direct (clic sur le lien magique)
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_IN" && session) {
+      gererSession(session.user);
+    }
+  });
 </script>
 
 </body>
