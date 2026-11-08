@@ -56,7 +56,7 @@
     }
 
     // Vérifie si l'étudiant existe déjà
-    let { data: existant, error } = await supabase
+    let { data: existant, error } = await supabaseClient
       .from("etudiants")
       .select("*")
       .eq("pseudo", pseudo)
@@ -70,7 +70,7 @@
     }
 
     // Sinon on le crée
-    let { data: nouveau, error: err2 } = await supabase
+    let { data: nouveau, error: err2 } = await supabaseClient
       .from("etudiants")
       .insert([{ pseudo: pseudo }])
       .select()
