@@ -39,9 +39,9 @@
 <div id="contenu">Chargement des matchs...</div>
 
 <script>
-  const SUPABASE_URL = "https://ykubdrctzejbsvrvoja.supabase.co";
+  const SUPABASE_URL = "https://idsqkecgefrebswrvoja.supabase.co";
   const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlkc3FrZWNnZWZyZWJzd3J2b2phIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTQ0MTIsImV4cCI6MjA5OTQzMDQxMn0.IwIGg7FgG1_bHrNIJbqjE3PUa0ZDD1eV2Vb0do3MlG8";
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   const pseudo = localStorage.getItem("pseudo");
   const etudiantId = localStorage.getItem("etudiant_id");
@@ -58,9 +58,9 @@
   }
 
   async function chargerMatchs() {
-    const { data: ligues } = await supabase.from("ligues").select("*, disciplines(nom)");
-    const { data: matchs } = await supabase.from("matchs").select("*").order("date_match", { ascending: true });
-    const { data: pronosExistants } = await supabase.from("pronostics").select("*").eq("etudiant_id", etudiantId);
+    const { data: ligues } = await supabaseClient.from("ligues").select("*, disciplines(nom)");
+    const { data: matchs } = await supabaseClient.from("matchs").select("*").order("date_match", { ascending: true });
+    const { data: pronosExistants } = await supabaseClient.from("pronostics").select("*").eq("etudiant_id", etudiantId);
 
     const contenu = document.getElementById("contenu");
     contenu.innerHTML = "";
@@ -138,7 +138,7 @@
       return;
     }
 
-    const { data: existant } = await supabase
+    const { data: existant } = await supabaseClient
       .from("pronostics")
       .select("*")
       .eq("match_id", matchId)
