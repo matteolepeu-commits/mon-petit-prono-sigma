@@ -77,7 +77,7 @@
       .single();
 
     if (err2) {
-      message.textContent = "Erreur : ce pseudo existe peut-être déjà.";
+      message.textContent = "Erreur : " + err2.message;
       return;
     }
 
