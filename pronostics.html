@@ -13,7 +13,7 @@
   .nav { display: flex; gap: 15px; margin-bottom: 30px; flex-wrap: wrap; justify-content: center; }
   .nav a { color: white; text-decoration: none; background: #334155; padding: 10px 20px; border-radius: 6px; }
   .nav a:hover { background: #475569; }
-  .ligue-titre { color: #fbbf24; margin: 25px 0 10px; font-size: 20px; border-bottom: 1px solid #334155; padding-bottom: 5px; }
+  .ligue-titre { color: #fbbf24; margin: 25px 0 10px; font-size: 20px; border-bottom: 1px solid #334155; padding-bottom: 5px; max-width: 500px; margin-left: auto; margin-right: auto; }
   .match-card { background: #1e293b; padding: 20px; border-radius: 10px; margin-bottom: 15px; max-width: 500px; margin-left: auto; margin-right: auto; }
   .equipes { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-weight: bold; font-size: 16px; }
   .scores { display: flex; justify-content: center; align-items: center; gap: 10px; }
@@ -75,6 +75,8 @@
     const { data: pronosExistants, error: errPronos } = await supabaseClient.from("pronostics").select("*").eq("etudiant_id", etudiantId);
     if (errPronos) { afficherErreur("Erreur table pronostics : " + errPronos.message); return; }
 
+    console.log("ligues:", ligues, "matchs:", matchs, "pronos:", pronosExistants);
+
     contenu.innerHTML = "";
 
     if (!matchs || matchs.length === 0) {
@@ -82,16 +84,21 @@
       return;
     }
 
-    ligues.forEach(ligue => {
-      const matchsDeLaLigue = matchs.filter(m => m.ligue_id === ligue.id);
-      if (matchsDeLaLigue.length === 0) return;
+    // Regroupement : chaque ligue + un groupe "Autres matchs" pour ceux sans ligue valide
+    const groupes = (ligues || []).map(l => ({ nom: l.nom, matchs: matchs.filter(m => m.ligue_id === l.id) }));
+    const idsLigues = (ligues || []).map(l => l.id);
+    const orphelins = matchs.filter(m => !idsLigues.includes(m.ligue_id));
+    if (orphelins.length > 0) groupes.push({ nom: "Autres matchs", matchs: orphelins });
+
+    groupes.forEach(groupe => {
+      if (groupe.matchs.length === 0) return;
 
       const titreLigue = document.createElement("div");
       titreLigue.className = "ligue-titre";
-      titreLigue.textContent = ligue.nom;
+      titreLigue.textContent = groupe.nom;
       contenu.appendChild(titreLigue);
 
-      matchsDeLaLigue.forEach(match => {
+      groupe.matchs.forEach(match => {
         const pronoExistant = (pronosExistants || []).find(p => p.match_id === match.id);
         const estTermine = match.score_equipe1 !== null && match.score_equipe2 !== null;
 
@@ -109,17 +116,17 @@
         if (estTermine) {
           contenuHtml += `<div class="resultat-final">Score final : ${match.score_equipe1} - ${match.score_equipe2}</div>`;
           if (pronoExistant) {
-            const pts = calculerPoints(pronoExistant.score_equipe1, pronoExistant.score_equipe2, match.score_equipe1, match.score_equipe2);
-            contenuHtml += `<div class="statut">Ton prono : ${pronoExistant.score_equipe1} - ${pronoExistant.score_equipe2} → <span class="points">${pts} pts</span></div>`;
+            const pts = calculerPoints(pronoExistant.score1_pronostic, pronoExistant.score2_pronostic, match.score_equipe1, match.score_equipe2);
+            contenuHtml += `<div class="statut">Ton prono : ${pronoExistant.score1_pronostic} - ${pronoExistant.score2_pronostic} → <span class="points">${pts} pts</span></div>`;
           } else {
             contenuHtml += `<div class="statut">Tu n'as pas pronostiqué ce match.</div>`;
           }
         } else {
           contenuHtml += `
             <div class="scores">
-              <input type="number" min="0" id="s1-${match.id}" value="${pronoExistant ? pronoExistant.score_equipe1 : ''}" placeholder="0">
+              <input type="number" min="0" id="s1-${match.id}" value="${pronoExistant ? pronoExistant.score1_pronostic : ''}" placeholder="0">
               <span class="vs">-</span>
-              <input type="number" min="0" id="s2-${match.id}" value="${pronoExistant ? pronoExistant.score_equipe2 : ''}" placeholder="0">
+              <input type="number" min="0" id="s2-${match.id}" value="${pronoExistant ? pronoExistant.score2_pronostic : ''}" placeholder="0">
             </div>
             <button class="valider" onclick="enregistrerProno('${match.id}')">Valider mon prono</button>
             <div class="statut" id="statut-${match.id}">${pronoExistant ? "Prono déjà enregistré, tu peux le modifier." : "Pas encore de prono."}</div>
@@ -166,12 +173,12 @@
     if (existant) {
       ({ error: erreur } = await supabaseClient
         .from("pronostics")
-        .update({ score_equipe1: s1, score_equipe2: s2 })
+        .update({ score1_pronostic: s1, score2_pronostic: s2 })
         .eq("id", existant.id));
     } else {
       ({ error: erreur } = await supabaseClient
         .from("pronostics")
-        .insert([{ match_id: matchId, etudiant_id: etudiantId, score_equipe1: s1, score_equipe2: s2 }]));
+        .insert([{ match_id: matchId, etudiant_id: etudiantId, score1_pronostic: s1, score2_pronostic: s2 }]));
     }
 
     statutDiv.textContent = erreur ? "❌ " + erreur.message : "✅ Prono enregistré !";
