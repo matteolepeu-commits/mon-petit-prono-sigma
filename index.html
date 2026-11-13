@@ -72,6 +72,9 @@
   // ⚠️ À MODIFIER : le(s) domaine(s) mail de ton école
   const DOMAINES_AUTORISES = ["sigma-clermont.fr"];
 
+  // Empêche de traiter la session plusieurs fois
+  let sessionTraitee = false;
+
   function afficherMessage(texte) {
     document.getElementById("message").textContent = texte;
   }
@@ -131,6 +134,9 @@
 
   // Après connexion : récupère le profil ou demande un pseudo
   async function gererSession(user) {
+    if (sessionTraitee) return;
+    sessionTraitee = true;
+
     const { data: etudiant, error } = await supabaseClient
       .from("etudiants")
       .select("*")
@@ -138,6 +144,7 @@
       .maybeSingle();
 
     if (error) {
+      sessionTraitee = false;
       afficherEtape(1);
       afficherMessage("Erreur : " + error.message);
       return;
@@ -198,20 +205,25 @@
     window.location.href = "pronostics.html";
   }
 
-  // Au chargement : vérifie si une session existe (retour du lien magique)
-  (async function init() {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (session) {
-      await gererSession(session.user);
+  // Affiche une erreur renvoyée dans l'URL (lien expiré, déjà utilisé...)
+  function verifierErreurUrl() {
+    const params = new URLSearchParams(window.location.hash.substring(1));
+    const description = params.get("error_description");
+    if (description) {
+      afficherMessage("Lien invalide ou expiré. Redemande un nouveau lien. (" + description.replace(/\+/g, " ") + ")");
+      history.replaceState(null, "", window.location.pathname);
     }
-  })();
+  }
 
-  // Détecte aussi la connexion en direct (clic sur le lien magique)
+  // Écoute les changements de session (inclut le retour du lien magique)
   supabaseClient.auth.onAuthStateChange((event, session) => {
-    if (event === "SIGNED_IN" && session) {
-      gererSession(session.user);
+    if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
+      // setTimeout évite un blocage connu de Supabase avec des appels dans ce callback
+      setTimeout(() => gererSession(session.user), 0);
     }
   });
+
+  verifierErreurUrl();
 </script>
 
 </body>
