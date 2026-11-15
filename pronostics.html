@@ -14,7 +14,9 @@
   .nav a { color: white; text-decoration: none; background: #334155; padding: 10px 20px; border-radius: 6px; }
   .nav a:hover { background: #475569; }
   .ligue-titre { color: #fbbf24; margin: 25px 0 10px; font-size: 20px; border-bottom: 1px solid #334155; padding-bottom: 5px; max-width: 500px; margin-left: auto; margin-right: auto; }
+  .section-titre { color: #22c55e; margin: 35px auto 10px; font-size: 22px; max-width: 500px; }
   .match-card { background: #1e293b; padding: 20px; border-radius: 10px; margin-bottom: 15px; max-width: 500px; margin-left: auto; margin-right: auto; }
+  .match-card.termine { opacity: 0.9; border-left: 4px solid #22c55e; }
   .equipes { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-weight: bold; font-size: 16px; }
   .scores { display: flex; justify-content: center; align-items: center; gap: 10px; }
   .scores input { width: 60px; padding: 10px; text-align: center; border-radius: 6px; border: none; font-size: 18px; }
@@ -61,32 +63,70 @@
     window.location.href = "index.html";
   }
 
-  function afficherErreur(texte) {
-    document.getElementById("contenu").innerHTML = `<div class="erreur">❌ ${texte}</div>`;
+  function echapper(texte) {
+    const div = document.createElement("div");
+    div.textContent = texte ?? "";
+    return div.innerHTML;
   }
 
-  async function chargerMatchs() {
-    const contenu = document.getElementById("contenu");
+  function afficherErreur(texte) {
+    document.getElementById("contenu").innerHTML = `<div class="erreur">❌ ${echapper(texte)}</div>`;
+  }
 
-    const { data: ligues, error: errLigues } = await supabaseClient.from("ligues").select("*");
-    if (errLigues) { afficherErreur("Erreur table ligues : " + errLigues.message); return; }
+  function calculerPoints(pS1, pS2, rS1, rS2) {
+    pS1 = Number(pS1); pS2 = Number(pS2); rS1 = Number(rS1); rS2 = Number(rS2);
+    if ([pS1, pS2, rS1, rS2].some(isNaN)) return 0;
+    if (pS1 === rS1 && pS2 === rS2) return 3;
+    return Math.sign(pS1 - pS2) === Math.sign(rS1 - rS2) ? 1 : 0;
+  }
 
-    const { data: matchs, error: errMatchs } = await supabaseClient.from("matchs").select("*").order("date_match", { ascending: true });
-    if (errMatchs) { afficherErreur("Erreur table matchs : " + errMatchs.message); return; }
+  // Un match est terminé si son statut vaut "termine" (même critère que classement.html)
+  function matchEstTermine(match) {
+    return match.statut === "termine";
+  }
 
-    const { data: pronosExistants, error: errPronos } = await supabaseClient.from("pronostics").select("*").eq("etudiant_id", etudiantId);
-    if (errPronos) { afficherErreur("Erreur table pronostics : " + errPronos.message); return; }
+  function creerCarte(match, pronoExistant) {
+    const s1Reel = match.score_equipe1;
+    const s2Reel = match.score_equipe2;
+    const termine = matchEstTermine(match);
 
-    console.log("ligues:", ligues, "matchs:", matchs, "pronos:", pronosExistants);
+    const card = document.createElement("div");
+    card.className = "match-card" + (termine ? " termine" : "");
 
-    contenu.innerHTML = "";
+    let html = `
+      <div class="equipes">
+        <span>${echapper(match.equipe1)}</span>
+        <span class="vs">VS</span>
+        <span>${echapper(match.equipe2)}</span>
+      </div>
+    `;
 
-    if (!matchs || matchs.length === 0) {
-      contenu.innerHTML = "<p style='text-align:center;color:#94a3b8;'>Aucun match disponible pour le moment.</p>";
-      return;
+    if (termine) {
+      html += `<div class="resultat-final">Score final : ${s1Reel} - ${s2Reel}</div>`;
+      if (pronoExistant) {
+        const pts = calculerPoints(pronoExistant.score1_pronostic, pronoExistant.score2_pronostic, s1Reel, s2Reel);
+        html += `<div class="statut">Ton prono : ${pronoExistant.score1_pronostic} - ${pronoExistant.score2_pronostic} → <span class="points">${pts} pt${pts > 1 ? "s" : ""}</span></div>`;
+      } else {
+        html += `<div class="statut">Tu n'as pas pronostiqué ce match.</div>`;
+      }
+    } else {
+      const verrouille = !!pronoExistant;
+      html += `
+        <div class="scores">
+          <input type="number" min="0" id="s1-${match.id}" value="${pronoExistant ? pronoExistant.score1_pronostic : ''}" placeholder="0" ${verrouille ? 'disabled' : ''}>
+          <span class="vs">-</span>
+          <input type="number" min="0" id="s2-${match.id}" value="${pronoExistant ? pronoExistant.score2_pronostic : ''}" placeholder="0" ${verrouille ? 'disabled' : ''}>
+        </div>
+        ${verrouille ? '' : `<button class="valider" onclick="enregistrerProno('${match.id}', this)">Valider mon prono</button>`}
+        <div class="statut" id="statut-${match.id}">${verrouille ? "✅ Prono enregistré" : "Pas encore de prono."}</div>
+      `;
     }
 
-    // Regroupement : chaque ligue + un groupe "Autres matchs" pour ceux sans ligue valide
+    card.innerHTML = html;
+    return card;
+  }
+
+  function afficherGroupes(contenu, matchs, ligues, pronosExistants) {
     const groupes = (ligues || []).map(l => ({ nom: l.nom, matchs: matchs.filter(m => m.ligue_id === l.id) }));
     const idsLigues = (ligues || []).map(l => l.id);
     const orphelins = matchs.filter(m => !idsLigues.includes(m.ligue_id));
@@ -101,55 +141,49 @@
       contenu.appendChild(titreLigue);
 
       groupe.matchs.forEach(match => {
-        const pronoExistant = (pronosExistants || []).find(p => p.match_id === match.id);
-        const s1Reel = match.score1 ?? match.score_equipe1 ?? null;
-        const s2Reel = match.score2 ?? match.score_equipe2 ?? null;
-        const estTermine = s1Reel !== null && s2Reel !== null;
-
-        const card = document.createElement("div");
-        card.className = "match-card";
-
-        let contenuHtml = `
-          <div class="equipes">
-            <span>${match.equipe1}</span>
-            <span class="vs">VS</span>
-            <span>${match.equipe2}</span>
-          </div>
-        `;
-
-        if (estTermine) {
-          contenuHtml += `<div class="resultat-final">Score final : ${s1Reel} - ${s2Reel}</div>`;
-          if (pronoExistant) {
-            const pts = calculerPoints(pronoExistant.score1_pronostic, pronoExistant.score2_pronostic, s1Reel, s2Reel);
-            contenuHtml += `<div class="statut">Ton prono : ${pronoExistant.score1_pronostic} - ${pronoExistant.score2_pronostic} → <span class="points">${pts} pts</span></div>`;
-          } else {
-            contenuHtml += `<div class="statut">Tu n'as pas pronostiqué ce match.</div>`;
-          }
-        } else {
-          const verrouille = !!pronoExistant;
-          contenuHtml += `
-            <div class="scores">
-              <input type="number" min="0" id="s1-${match.id}" value="${pronoExistant ? pronoExistant.score1_pronostic : ''}" placeholder="0" ${verrouille ? 'disabled' : ''}>
-              <span class="vs">-</span>
-              <input type="number" min="0" id="s2-${match.id}" value="${pronoExistant ? pronoExistant.score2_pronostic : ''}" placeholder="0" ${verrouille ? 'disabled' : ''}>
-            </div>
-            ${verrouille ? '' : `<button class="valider" onclick="enregistrerProno('${match.id}', this)">Valider mon prono</button>`}
-            <div class="statut" id="statut-${match.id}">${verrouille ? "✅ Prono enregistré" : "Pas encore de prono."}</div>
-          `;
-        }
-
-        card.innerHTML = contenuHtml;
-        contenu.appendChild(card);
+        const pronoExistant = (pronosExistants || []).find(p => String(p.match_id) === String(match.id));
+        contenu.appendChild(creerCarte(match, pronoExistant));
       });
     });
   }
 
-  function calculerPoints(pS1, pS2, rS1, rS2) {
-    if (pS1 === rS1 && pS2 === rS2) return 3;
-    const pDiff = pS1 - pS2;
-    const rDiff = rS1 - rS2;
-    if ((pDiff > 0 && rDiff > 0) || (pDiff < 0 && rDiff < 0) || (pDiff === 0 && rDiff === 0)) return 1;
-    return 0;
+  async function chargerMatchs() {
+    const contenu = document.getElementById("contenu");
+
+    const { data: ligues, error: errLigues } = await supabaseClient.from("ligues").select("*");
+    if (errLigues) { afficherErreur("Erreur table ligues : " + errLigues.message); return; }
+
+    const { data: matchs, error: errMatchs } = await supabaseClient.from("matchs").select("*").order("date_match", { ascending: true });
+    if (errMatchs) { afficherErreur("Erreur table matchs : " + errMatchs.message); return; }
+
+    const { data: pronosExistants, error: errPronos } = await supabaseClient.from("pronostics").select("*").eq("etudiant_id", etudiantId);
+    if (errPronos) { afficherErreur("Erreur table pronostics : " + errPronos.message); return; }
+
+    contenu.innerHTML = "";
+
+    if (!matchs || matchs.length === 0) {
+      contenu.innerHTML = "<p style='text-align:center;color:#94a3b8;'>Aucun match disponible pour le moment.</p>";
+      return;
+    }
+
+    const matchsAVenir = matchs.filter(m => !matchEstTermine(m));
+    const matchsTermines = matchs.filter(m => matchEstTermine(m));
+
+    // Matchs à venir (modifiables)
+    if (matchsAVenir.length > 0) {
+      afficherGroupes(contenu, matchsAVenir, ligues, pronosExistants);
+    } else {
+      contenu.innerHTML = "<p style='text-align:center;color:#94a3b8;'>Aucun match à pronostiquer pour le moment.</p>";
+    }
+
+    // Matchs terminés (lecture seule, avec les points)
+    if (matchsTermines.length > 0) {
+      const titre = document.createElement("h2");
+      titre.className = "section-titre";
+      titre.textContent = "✅ Matchs terminés";
+      contenu.appendChild(titre);
+      afficherGroupes(contenu, matchsTermines, ligues, pronosExistants);
+    }
   }
 
   async function enregistrerProno(matchId, btn) {
