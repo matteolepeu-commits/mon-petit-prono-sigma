@@ -21,7 +21,9 @@
   .match-item { background: #24324a; padding: 12px; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
   .match-item span { font-size: 14px; }
   .match-item input { width: 50px; display: inline-block; margin: 0; }
-  .valider-btn { width: auto; padding: 8px 15px; font-size: 13px; }
+  .valider-btn { width: auto; padding: 8px 15px; font-size: 13px; margin-top: 0; }
+  .suppr-btn { width: auto; padding: 8px 12px; font-size: 13px; margin-top: 0; background: #ef4444; }
+  .suppr-btn:hover { background: #dc2626; }
   #mdp-box { max-width: 400px; margin: 100px auto; text-align: center; }
 </style>
 </head>
@@ -100,9 +102,18 @@
   }
 
   async function chargerMatchs() {
-    const { data: matchs } = await supabaseClient.from("matchs").select("*").order("date_match", { ascending: true });
+    const { data: matchs, error } = await supabaseClient
+      .from("matchs")
+      .select("*")
+      .order("date_match", { ascending: true });
+
     const div = document.getElementById("liste-matchs");
     div.innerHTML = "";
+
+    if (error) {
+      div.innerHTML = "Erreur de chargement : " + error.message;
+      return;
+    }
 
     if (!matchs || matchs.length === 0) {
       div.innerHTML = "Aucun match pour le moment";
@@ -112,18 +123,21 @@
     matchs.forEach(m => {
       const item = document.createElement("div");
       item.className = "match-item";
+      const dateAffichee = m.date_match ? m.date_match.slice(0, 10) : "";
 
       if (m.statut === "termine") {
         item.innerHTML = `
-          <span>✅ ${m.equipe1} ${m.score_equipe1} - ${m.score_equipe2} ${m.equipe2}</span>
+          <span>✅ ${m.equipe1} ${m.score1_final} - ${m.score2_final} ${m.equipe2} (${dateAffichee})</span>
+          <button class="suppr-btn" onclick="supprimerMatch('${m.id}')">🗑️</button>
         `;
       } else {
         item.innerHTML = `
-          <span>${m.equipe1} vs ${m.equipe2} (${m.date_match})</span>
+          <span>${m.equipe1} vs ${m.equipe2} (${dateAffichee})</span>
           <input type="number" id="s1-${m.id}" placeholder="0" min="0">
           <span>-</span>
           <input type="number" id="s2-${m.id}" placeholder="0" min="0">
           <button class="valider-btn" onclick="validerResultat('${m.id}', this)">Valider</button>
+          <button class="suppr-btn" onclick="supprimerMatch('${m.id}')">🗑️</button>
         `;
       }
 
@@ -162,8 +176,8 @@
     btn.textContent = "Envoi...";
 
     const { error } = await supabaseClient.from("matchs").update({
-      score_equipe1: parseInt(s1),
-      score_equipe2: parseInt(s2),
+      score1_final: parseInt(s1),
+      score2_final: parseInt(s2),
       statut: "termine"
     }).eq("id", matchId);
 
@@ -173,11 +187,6 @@
       btn.textContent = "Valider";
       return;
     }
-
-    // Succès : le bouton disparaît et les champs sont verrouillés
-    btn.style.display = "none";
-    input1.disabled = true;
-    input2.disabled = true;
 
     // Recharge la liste pour afficher le résultat final
     chargerMatchs();
