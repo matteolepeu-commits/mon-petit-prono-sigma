@@ -75,6 +75,14 @@
     return div.innerHTML;
   }
 
+  function calculerPoints(pS1, pS2, rS1, rS2) {
+    if ([pS1, pS2, rS1, rS2].some(isNaN)) return 0;
+    if (pS1 === rS1 && pS2 === rS2) return 3;
+    const pDiff = Math.sign(pS1 - pS2);
+    const rDiff = Math.sign(rS1 - rS2);
+    return pDiff === rDiff ? 1 : 0;
+  }
+
   async function chargerClassement() {
     const tbody = document.getElementById("classement-body");
 
@@ -97,10 +105,25 @@
     const scores = {};
     etudiants.forEach(e => scores[e.id] = { id: e.id, pseudo: e.pseudo, points: 0 });
 
+    // Un seul pronostic par joueur et par match (le dernier)
+    const uniques = {};
     pronostics.forEach(p => {
+      uniques[p.etudiant_id + "_" + p.match_id] = p;
+    });
+
+    Object.values(uniques).forEach(p => {
       const match = matchs.find(m => m.id === p.match_id);
       if (!match) return;
-      const points = calculerPoints(p.score_equipe1, p.score_equipe2, match.score_equipe1, match.score_equipe2);
+
+      // DEBUG : à supprimer une fois le problème résolu
+      console.log(p.etudiant_id, "match", p.match_id,
+        "prono", p.score_equipe1, p.score_equipe2,
+        "résultat", match.score_equipe1, match.score_equipe2);
+
+      const points = calculerPoints(
+        Number(p.score_equipe1), Number(p.score_equipe2),
+        Number(match.score_equipe1), Number(match.score_equipe2)
+      );
       if (scores[p.etudiant_id]) scores[p.etudiant_id].points += points;
     });
 
@@ -125,16 +148,8 @@
     });
   }
 
-  function calculerPoints(pS1, pS2, rS1, rS2) {
-    if (pS1 === rS1 && pS2 === rS2) return 3;
-    const pDiff = pS1 - pS2;
-    const rDiff = rS1 - rS2;
-    if ((pDiff > 0 && rDiff > 0) || (pDiff < 0 && rDiff < 0) || (pDiff === 0 && rDiff === 0)) return 1;
-    return 0;
-  }
-
   chargerClassement();
 </script>
 
 </body>
-</htm
+</html>
