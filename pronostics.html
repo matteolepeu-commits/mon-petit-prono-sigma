@@ -86,8 +86,9 @@
   }
 
   function creerCarte(match, pronoExistant) {
-    const s1Reel = match.score_equipe1;
-    const s2Reel = match.score_equipe2;
+    // Colonnes réelles de la table matchs : score1_final / score2_final
+    const s1Reel = match.score1_final;
+    const s2Reel = match.score2_final;
     const termine = matchEstTermine(match);
 
     const card = document.createElement("div");
