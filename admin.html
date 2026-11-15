@@ -17,6 +17,7 @@
   input, select { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 6px; border: none; background: #334155; color: white; }
   button { width: 100%; padding: 12px; background: #22c55e; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 5px; }
   button:hover { background: #16a34a; }
+  button:disabled { background: #475569; cursor: not-allowed; }
   .match-item { background: #24324a; padding: 12px; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
   .match-item span { font-size: 14px; }
   .match-item input { width: 50px; display: inline-block; margin: 0; }
@@ -111,6 +112,7 @@
     matchs.forEach(m => {
       const item = document.createElement("div");
       item.className = "match-item";
+      item.id = `match-${m.id}`;
 
       if (m.statut === "termine") {
         item.innerHTML = `
@@ -122,7 +124,7 @@
           <input type="number" id="s1-${m.id}" placeholder="0" min="0">
           <span>-</span>
           <input type="number" id="s2-${m.id}" placeholder="0" min="0">
-          <button class="valider-btn" onclick="validerResultat(${m.id})">Valider</button>
+          <button class="valider-btn" onclick="validerResultat(${m.id}, this)">Valider</button>
         `;
       }
 
@@ -130,28 +132,35 @@
     });
   }
 
- async function supprimerMatch(id) {
-   if (!confirm("Es-tu sûr de vouloir supprimer ce match ?")) return;
+  async function supprimerMatch(id) {
+    if (!confirm("Es-tu sûr de vouloir supprimer ce match ?")) return;
 
-   const { error } = await supabaseClient
-     .from("matchs")
-     .delete()
-     .eq("id", id);
+    const { error } = await supabaseClient
+      .from("matchs")
+      .delete()
+      .eq("id", id);
 
-   if (error) {
-     alert("Erreur lors de la suppression : " + error.message);
-   } else {
-     chargerMatchs();
-   }
- }
-  async function validerResultat(matchId) {
-    const s1 = document.getElementById(`s1-${matchId}`).value;
-    const s2 = document.getElementById(`s2-${matchId}`).value;
+    if (error) {
+      alert("Erreur lors de la suppression : " + error.message);
+    } else {
+      chargerMatchs();
+    }
+  }
+
+  async function validerResultat(matchId, btn) {
+    const input1 = document.getElementById(`s1-${matchId}`);
+    const input2 = document.getElementById(`s2-${matchId}`);
+    const s1 = input1.value;
+    const s2 = input2.value;
 
     if (s1 === "" || s2 === "") {
       alert("Entre les deux scores");
       return;
     }
+
+    // Empêche le double clic pendant l'enregistrement
+    btn.disabled = true;
+    btn.textContent = "Envoi...";
 
     const { error } = await supabaseClient.from("matchs").update({
       score_equipe1: parseInt(s1),
@@ -161,9 +170,17 @@
 
     if (error) {
       alert("Erreur : " + error.message);
+      btn.disabled = false;
+      btn.textContent = "Valider";
       return;
     }
 
+    // Succès : le bouton disparaît et les champs sont verrouillés
+    btn.style.display = "none";
+    input1.disabled = true;
+    input2.disabled = true;
+
+    // Affiche directement le résultat final dans la ligne
     chargerMatchs();
   }
 </script>
