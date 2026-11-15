@@ -112,16 +112,11 @@
     });
 
     Object.values(uniques).forEach(p => {
-      const match = matchs.find(m => m.id === p.match_id);
+      const match = matchs.find(m => String(m.id) === String(p.match_id));
       if (!match) return;
 
-      // DEBUG : à supprimer une fois le problème résolu
-      console.log(p.etudiant_id, "match", p.match_id,
-        "prono", p.score_equipe1, p.score_equipe2,
-        "résultat", match.score_equipe1, match.score_equipe2);
-
       const points = calculerPoints(
-        Number(p.score_equipe1), Number(p.score_equipe2),
+        Number(p.score1_pronostic), Number(p.score2_pronostic),
         Number(match.score_equipe1), Number(match.score_equipe2)
       );
       if (scores[p.etudiant_id]) scores[p.etudiant_id].points += points;
