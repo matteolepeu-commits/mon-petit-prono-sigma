@@ -10,6 +10,7 @@
   h1 { color: #22c55e; margin: 30px 0; text-align: center; }
   .card { background: #1e293b; padding: 30px; border-radius: 12px; max-width: 400px; width: 100%; margin-bottom: 20px; }
   input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: none; font-size: 16px; }
+  input.code { text-align: center; font-size: 24px; letter-spacing: 6px; }
   button { width: 100%; padding: 12px; background: #22c55e; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; margin-top: 10px; }
   button:hover { background: #16a34a; }
   button:disabled { background: #475569; cursor: not-allowed; }
@@ -38,18 +39,20 @@
 
   <!-- Étape 1 : saisie du mail -->
   <div id="etape1">
-    <p class="info">Entre ton adresse mail d'école pour recevoir un lien de connexion.</p>
+    <p class="info">Entre ton adresse mail d'école pour recevoir un code de connexion.</p>
     <input type="email" id="email" placeholder="prenom.nom@ecole.fr">
-    <button id="btnEmail" onclick="envoyerLien()">Recevoir mon lien de connexion</button>
+    <button id="btnEmail" onclick="envoyerCode()">Recevoir mon code</button>
   </div>
 
-  <!-- Étape 2 : lien envoyé -->
+  <!-- Étape 2 : saisie du code reçu par mail -->
   <div id="etape2" class="cache">
     <p class="info">
-      📧 Un lien de connexion a été envoyé à<br>
+      📧 Un code a été envoyé à<br>
       <strong id="emailAffiche" style="color:white;"></strong><br><br>
-      Clique sur le lien dans le mail pour te connecter (pense à vérifier les spams).
+      Entre-le ci-dessous (pense à vérifier les spams).
     </p>
+    <input type="text" id="code" class="code" placeholder="00000000" maxlength="10" inputmode="numeric" autocomplete="one-time-code">
+    <button id="btnCode" onclick="verifierCode()">Valider le code</button>
     <button class="lien" onclick="retourEtape1()">← Changer d'adresse mail</button>
   </div>
 
@@ -69,11 +72,14 @@
   const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlkc3FrZWNnZWZyZWJzd3J2b2phIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTQ0MTIsImV4cCI6MjA5OTQzMDQxMn0.IwIGg7FgG1_bHrNIJbqjE3PUa0ZDD1eV2Vb0do3MlG8";
   const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // ⚠️ À MODIFIER : le(s) domaine(s) mail de ton école
+  // Domaine(s) mail autorisé(s)
   const DOMAINES_AUTORISES = ["sigma-clermont.fr"];
 
   // Empêche de traiter la session plusieurs fois
   let sessionTraitee = false;
+
+  // Email en cours de connexion
+  let emailEnCours = "";
 
   function afficherMessage(texte) {
     document.getElementById("message").textContent = texte;
@@ -87,6 +93,7 @@
   }
 
   function retourEtape1() {
+    document.getElementById("code").value = "";
     afficherEtape(1);
   }
 
@@ -95,8 +102,8 @@
     return domaine && DOMAINES_AUTORISES.includes(domaine.toLowerCase());
   }
 
-  // Envoi du lien magique
-  async function envoyerLien() {
+  // Étape 1 : envoi du code par mail
+  async function envoyerCode() {
     const email = document.getElementById("email").value.trim().toLowerCase();
     const btn = document.getElementById("btnEmail");
 
@@ -116,8 +123,7 @@
     const { error } = await supabaseClient.auth.signInWithOtp({
       email: email,
       options: {
-        shouldCreateUser: true,
-        emailRedirectTo: window.location.origin + "/index.html"
+        shouldCreateUser: true
       }
     });
 
@@ -128,9 +134,53 @@
       return;
     }
 
+    emailEnCours = email;
     document.getElementById("emailAffiche").textContent = email;
     afficherEtape(2);
   }
+
+  // Étape 2 : vérification du code saisi
+  async function verifierCode() {
+    const code = document.getElementById("code").value.trim();
+    const btn = document.getElementById("btnCode");
+
+    if (!code) {
+      afficherMessage("Merci d'entrer le code reçu par mail.");
+      return;
+    }
+
+    btn.disabled = true;
+    afficherMessage("Vérification...");
+
+    const { data, error } = await supabaseClient.auth.verifyOtp({
+      email: emailEnCours,
+      token: code,
+      type: "email"
+    });
+
+    btn.disabled = false;
+
+    if (error) {
+      afficherMessage("Code invalide ou expiré. Vérifie le code ou redemande-en un nouveau.");
+      return;
+    }
+
+    // La connexion est réussie, on récupère l'utilisateur
+    if (data && data.user) {
+      gererSession(data.user);
+    }
+  }
+
+  // Permet de valider avec la touche Entrée
+  document.getElementById("code").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") verifierCode();
+  });
+  document.getElementById("email").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") envoyerCode();
+  });
+  document.getElementById("pseudo").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") validerPseudo();
+  });
 
   // Après connexion : récupère le profil ou demande un pseudo
   async function gererSession(user) {
@@ -205,25 +255,12 @@
     window.location.href = "pronostics.html";
   }
 
-  // Affiche une erreur renvoyée dans l'URL (lien expiré, déjà utilisé...)
-  function verifierErreurUrl() {
-    const params = new URLSearchParams(window.location.hash.substring(1));
-    const description = params.get("error_description");
-    if (description) {
-      afficherMessage("Lien invalide ou expiré. Redemande un nouveau lien. (" + description.replace(/\+/g, " ") + ")");
-      history.replaceState(null, "", window.location.pathname);
-    }
-  }
-
-  // Écoute les changements de session (inclut le retour du lien magique)
-  supabaseClient.auth.onAuthStateChange((event, session) => {
-    if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
-      // setTimeout évite un blocage connu de Supabase avec des appels dans ce callback
-      setTimeout(() => gererSession(session.user), 0);
+  // Si l'étudiant est déjà connecté (session existante), on le redirige directement
+  supabaseClient.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      gererSession(session.user);
     }
   });
-
-  verifierErreurUrl();
 </script>
 
 </body>
