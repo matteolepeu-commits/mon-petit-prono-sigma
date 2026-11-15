@@ -71,16 +71,15 @@
   // Évite l'injection de HTML via un pseudo
   function echapper(texte) {
     const div = document.createElement("div");
-    div.textContent = texte;
+    div.textContent = texte ?? "";
     return div.innerHTML;
   }
 
   function calculerPoints(pS1, pS2, rS1, rS2) {
+    pS1 = Number(pS1); pS2 = Number(pS2); rS1 = Number(rS1); rS2 = Number(rS2);
     if ([pS1, pS2, rS1, rS2].some(isNaN)) return 0;
     if (pS1 === rS1 && pS2 === rS2) return 3;
-    const pDiff = Math.sign(pS1 - pS2);
-    const rDiff = Math.sign(rS1 - rS2);
-    return pDiff === rDiff ? 1 : 0;
+    return Math.sign(pS1 - pS2) === Math.sign(rS1 - rS2) ? 1 : 0;
   }
 
   async function chargerClassement() {
@@ -115,9 +114,10 @@
       const match = matchs.find(m => String(m.id) === String(p.match_id));
       if (!match) return;
 
+      // Colonnes réelles de la table matchs : score1_final / score2_final
       const points = calculerPoints(
-        Number(p.score1_pronostic), Number(p.score2_pronostic),
-        Number(match.score_equipe1), Number(match.score_equipe2)
+        p.score1_pronostic, p.score2_pronostic,
+        match.score1_final, match.score2_final
       );
       if (scores[p.etudiant_id]) scores[p.etudiant_id].points += points;
     });
