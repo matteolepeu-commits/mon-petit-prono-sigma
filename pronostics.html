@@ -18,6 +18,7 @@
   .equipes { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-weight: bold; font-size: 16px; }
   .scores { display: flex; justify-content: center; align-items: center; gap: 10px; }
   .scores input { width: 60px; padding: 10px; text-align: center; border-radius: 6px; border: none; font-size: 18px; }
+  .scores input:disabled { background: #475569; color: #e2e8f0; cursor: not-allowed; }
   .vs { color: #94a3b8; }
   button.valider { display: block; margin: 15px auto 0; padding: 10px 25px; background: #22c55e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; }
   button.valider:hover { background: #16a34a; }
@@ -55,10 +56,10 @@
   document.getElementById("pseudoInfo").textContent = "Connecté en tant que : " + pseudo;
 
   async function deconnexion() {
-  await supabaseClient.auth.signOut();
-  localStorage.clear();
-  window.location.href = "index.html";
-}
+    await supabaseClient.auth.signOut();
+    localStorage.clear();
+    window.location.href = "index.html";
+  }
 
   function afficherErreur(texte) {
     document.getElementById("contenu").innerHTML = `<div class="erreur">❌ ${texte}</div>`;
@@ -125,14 +126,15 @@
             contenuHtml += `<div class="statut">Tu n'as pas pronostiqué ce match.</div>`;
           }
         } else {
+          const verrouille = !!pronoExistant;
           contenuHtml += `
             <div class="scores">
-              <input type="number" min="0" id="s1-${match.id}" value="${pronoExistant ? pronoExistant.score1_pronostic : ''}" placeholder="0">
+              <input type="number" min="0" id="s1-${match.id}" value="${pronoExistant ? pronoExistant.score1_pronostic : ''}" placeholder="0" ${verrouille ? 'disabled' : ''}>
               <span class="vs">-</span>
-              <input type="number" min="0" id="s2-${match.id}" value="${pronoExistant ? pronoExistant.score2_pronostic : ''}" placeholder="0">
+              <input type="number" min="0" id="s2-${match.id}" value="${pronoExistant ? pronoExistant.score2_pronostic : ''}" placeholder="0" ${verrouille ? 'disabled' : ''}>
             </div>
-            <button class="valider" onclick="enregistrerProno('${match.id}')">Valider mon prono</button>
-            <div class="statut" id="statut-${match.id}">${pronoExistant ? "Prono déjà enregistré, tu peux le modifier." : "Pas encore de prono."}</div>
+            ${verrouille ? '' : `<button class="valider" onclick="enregistrerProno('${match.id}', this)">Valider mon prono</button>`}
+            <div class="statut" id="statut-${match.id}">${verrouille ? "✅ Prono enregistré" : "Pas encore de prono."}</div>
           `;
         }
 
@@ -150,7 +152,7 @@
     return 0;
   }
 
-  async function enregistrerProno(matchId) {
+  async function enregistrerProno(matchId, btn) {
     const s1 = parseInt(document.getElementById(`s1-${matchId}`).value);
     const s2 = parseInt(document.getElementById(`s2-${matchId}`).value);
     const statutDiv = document.getElementById(`statut-${matchId}`);
@@ -184,7 +186,14 @@
         .insert([{ match_id: matchId, etudiant_id: etudiantId, score1_pronostic: s1, score2_pronostic: s2 }]));
     }
 
-    statutDiv.textContent = erreur ? "❌ " + erreur.message : "✅ Prono enregistré !";
+    if (erreur) {
+      statutDiv.textContent = "❌ " + erreur.message;
+    } else {
+      statutDiv.textContent = "✅ Prono enregistré !";
+      btn.style.display = "none";
+      document.getElementById(`s1-${matchId}`).disabled = true;
+      document.getElementById(`s2-${matchId}`).disabled = true;
+    }
   }
 
   chargerMatchs();
